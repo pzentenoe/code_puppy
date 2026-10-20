@@ -933,7 +933,19 @@ class ModelFactory:
                 )
                 return None
 
-            model = GeminiModel(model_name=model_config["name"], api_key=api_key)
+            # Inject the shared retrying client, exactly like the
+            # custom_gemini path below: one way to build a client, so the
+            # vanilla gemini type also gets retries, proxy support,
+            # SSL_CERT_FILE trust and the http2 setting.
+            client = create_async_client(
+                verify=get_cert_bundle_path(),
+                timeout=180,
+            )
+            model = GeminiModel(
+                model_name=model_config["name"],
+                api_key=api_key,
+                http_client=client,
+            )
             return model
 
         elif model_type == "openai":
