@@ -15,6 +15,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from types import TracebackType
 from typing import Any
 
 import httpx
@@ -131,9 +132,17 @@ class GeminiModel(Model):
         return None
 
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
+        """Get or create the HTTP client.
+
+        When no client is injected, build one through the shared factory so
+        this path gets the same treatment as every other provider: retries,
+        proxy support, ``SSL_CERT_FILE`` trust and the http2 setting. A bare
+        ``httpx.AsyncClient`` here silently opted out of all of them.
+        """
         if self._http_client is None:
-            self._http_client = httpx.AsyncClient(timeout=180)
+            from code_puppy.http_utils import create_async_client
+
+            self._http_client = create_async_client(timeout=180)
         return self._http_client
 
     async def _close_client(self) -> None:
@@ -141,6 +150,21 @@ class GeminiModel(Model):
         if self._owns_client and self._http_client is not None:
             await self._http_client.aclose()
             self._http_client = None
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
+        """Close the client we own when the model context exits.
+
+        pydantic-ai's ``Model.__aexit__`` only tears down the *provider's*
+        client; this model talks to the API directly, so the client it
+        created itself would otherwise outlive the model.
+        """
+        await self._close_client()
+        return await super().__aexit__(exc_type, exc_val, exc_tb)
 
     def _get_headers(self) -> dict[str, str]:
         """Get HTTP headers for the request."""
