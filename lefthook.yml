@@ -1,20 +1,17 @@
 pre-commit:
   parallel: true
   commands:
-    isort:
+    ruff-imports:
+      # Import sorting is ruff's job: isort is not a dev dependency, so the
+      # old isort step always fell through to this fallback -- and isort's
+      # black profile can order imports differently from ruff's isort rules,
+      # which made the two steps fight over the same lines.
       glob: "*.py"
       run: |
-        if command -v uv >/dev/null 2>&1 && uv run isort --version >/dev/null 2>&1; then
-          uv run isort --profile black {staged_files}
-        elif command -v isort >/dev/null 2>&1; then
-          isort --profile black {staged_files}
+        if command -v uv >/dev/null 2>&1; then
+          uv run ruff check --select I --fix {staged_files}
         else
-          echo "isort not found; using ruff import sorter";
-          if command -v uv >/dev/null 2>&1; then
-            uv run ruff check --select I --fix {staged_files}
-          else
-            ruff check --select I --fix {staged_files}
-          fi
+          ruff check --select I --fix {staged_files}
         fi
       stage_fixed: true
     ruff-format:
