@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 import select
 import signal
@@ -724,7 +725,12 @@ def run_shell_command_streaming(
             else:
                 _pump_posix(pipe, lines_list, stream)
         except Exception:
-            pass  # closed/invalid pipe: nothing left to read
+            # Closed/invalid pipe: nothing left to read. Log it anyway -- a
+            # reader thread that dies mid-stream turns truncated output into
+            # a clean-looking result, and nothing else would show for it.
+            logging.getLogger(__name__).debug(
+                "Shell reader thread stopped early", exc_info=True
+            )
 
     def cleanup_process_and_threads(timeout_type: str = "unknown"):
         nonlocal stdout_thread, stderr_thread

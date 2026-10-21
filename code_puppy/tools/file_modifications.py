@@ -347,6 +347,7 @@ def _delete_snippet_from_file(
         }
 
     except Exception as exc:
+        _log_error("Unhandled exception in delete_snippet_from_file", exc)
         return {"error": str(exc), "diff": diff_text}
 
 
@@ -459,6 +460,7 @@ def _replace_in_file(
         }
 
     except Exception as exc:
+        _log_error("Unhandled exception in replace_in_file", exc)
         return {"error": str(exc), "diff": diff_text}
 
 
