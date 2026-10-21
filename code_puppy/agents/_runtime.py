@@ -75,8 +75,8 @@ from code_puppy.agents._non_streaming_render import (
     should_render_fallback,
 )
 from code_puppy.agents._run_signals import (
+    collect_interrupted_subagent_notes,
     drain_pause_state_on_cancel,
-    inject_interrupted_subagent_notes,
     make_schedule_cancel,
     prepare_queued_steer_injection,
     reset_pause_state_at_run_start,
@@ -754,11 +754,12 @@ async def _run_with_mcp_impl(
     # touching anything: without this, a leftover steer queue would silently
     # poison this run. NEVER from a nested run — the "stale" steers it would
     # drain are the OUTER run's live ones.
+    interrupted_note = None
     if not is_nested_run:
         reset_pause_state_at_run_start()
         # Surface any sub-agent interrupted since the last run so the model
         # knows the delegation was stopped and where to resume it.
-        inject_interrupted_subagent_notes(agent)
+        interrupted_note = collect_interrupted_subagent_notes()
 
     prompt = _sanitize_prompt(prompt)
     group_id = str(uuid.uuid4())
@@ -813,6 +814,18 @@ async def _run_with_mcp_impl(
     )
 
     prompt = _should_prepend_system_prompt(agent, prompt)
+
+    if interrupted_note:
+        # Prepend to THIS user turn instead of injecting a separate message:
+        # a synthetic user message would sit right next to the user's own,
+        # and the Anthropic Messages API requires strict user/assistant
+        # alternation -- the provider would have to glue them together, so
+        # the model would see a conversation shape Code Puppy never built.
+        #
+        # Done AFTER the user_prompt_submit hook: a hook is allowed to
+        # replace the prompt, and the note must not be lost with it.
+        prompt = f"{interrupted_note}\n\n{prompt}"
+
     prompt_payload = _build_prompt_payload(prompt, attachments, link_attachments)
 
     async def _do_run(prompt_to_use: Any) -> Any:

@@ -27,7 +27,7 @@ def runtime_contract(monkeypatch):
     agent = CodePuppyAgent()
     monkeypatch.setattr(agent, "get_model_name", lambda: "offline-model")
     monkeypatch.setattr(_runtime, "reset_pause_state_at_run_start", Mock())
-    monkeypatch.setattr(_runtime, "inject_interrupted_subagent_notes", Mock())
+    monkeypatch.setattr(_runtime, "collect_interrupted_subagent_notes", Mock())
     monkeypatch.setattr(_runtime, "on_user_prompt_submit", AsyncMock(return_value=[]))
     monkeypatch.setattr(
         "code_puppy.model_switching.resolve_run_model_selection", Mock()
