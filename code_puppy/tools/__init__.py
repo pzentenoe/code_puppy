@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -159,8 +160,13 @@ def _load_plugin_tools() -> None:
                     if callable(register_func):
                         TOOL_REGISTRY[tool_name] = register_func
     except Exception:
-        # Don't let plugin failures break core functionality
-        pass
+        # Don't let plugin failures break core functionality -- but say so.
+        # A silent failure here makes EVERY plugin-provided tool vanish, and
+        # the agent then reports "Unknown tool 'X' requested, skipping..."
+        # with no hint of the root cause.
+        logging.getLogger(__name__).exception(
+            "Plugin tool registration failed; plugin tools may be missing"
+        )
 
 
 def has_extended_thinking_active(model_name: str | None = None) -> bool:
