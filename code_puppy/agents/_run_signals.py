@@ -282,32 +282,35 @@ def prepare_queued_steer_injection(agent: Any, result: Any) -> Optional[Any]:
     return content
 
 
-def inject_interrupted_subagent_notes(agent: Any) -> None:
-    """Tell the agent about any sub-agents interrupted since the last run.
+def collect_interrupted_subagent_notes() -> str | None:
+    """Collect notes about sub-agents interrupted since the last run.
 
     Ctrl+C cancels both the delegated sub-agent task and the parent run, and
     the parent's return-less ``invoke_agent`` tool call is pruned from history
     as a dangling call -- so without this the model would have no memory that
     it ever delegated. We drain the records left by the sub-agent cancel path
-    and append one plain user-message note per interrupted session (the same
-    injection shape the steer processor uses), which survives the interrupted
-    tool-call prune because it is a valid standalone message.
+    and describe each interrupted session.
+
+    The notes are returned as **text for the next user turn**, not appended to
+    the history as their own messages: a synthetic user message sits right
+    next to the user's real message, and the Anthropic Messages API requires
+    strict user/assistant alternation -- so the provider has to glue them
+    together, and the model ends up seeing a conversation shape Code Puppy
+    never built. Prepending to the user's own turn keeps one message per
+    turn, and the note still survives the interrupted tool-call prune because
+    it travels inside a valid user message.
 
     Called at run start (never nested) so a foreground cancel surfaces on the
     user's next turn, and a ``/fork`` cancelled while the agent was idle
     surfaces on the next run too.
     """
-    from pydantic_ai.messages import ModelRequest, UserPromptPart
-
     from code_puppy.tools.subagent_invocation import drain_interrupted_subagents
 
-    if not hasattr(agent, "_message_history"):
-        return
     records = drain_interrupted_subagents()
     if not records:
-        return
+        return None
 
-    injected = []
+    notes = []
     for rec in records:
         session_id = rec["session_id"]
         saved = rec["saved_count"]
@@ -316,18 +319,17 @@ def inject_interrupted_subagent_notes(agent: Any) -> None:
             if saved is not None
             else "no completed messages had been produced yet"
         )
-        note = (
+        notes.append(
             f"[system note] The sub-agent '{rec['agent_name']}' you invoked was "
             f"interrupted by the user before it finished; {saved_phrase}. Its "
             f"partial session is saved as '{session_id}'."
         )
-        injected.append(ModelRequest(parts=[UserPromptPart(content=note)]))
         emit_info(
             f"Noting interrupted sub-agent '{rec['agent_name']}' "
             f"(session {session_id}) for the agent's next turn."
         )
 
-    agent._message_history = list(agent._message_history) + injected
+    return "\n".join(notes)
 
 
 def drain_pause_state_on_cancel() -> None:
@@ -352,7 +354,7 @@ __all__ = [
     "CANCEL_ESCALATE_AFTER_S",
     "clear_detach_event",
     "drain_pause_state_on_cancel",
-    "inject_interrupted_subagent_notes",
+    "collect_interrupted_subagent_notes",
     "install_detach_event",
     "make_schedule_cancel",
     "mcp_preparation_cancellation",
