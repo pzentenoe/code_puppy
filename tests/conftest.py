@@ -11,7 +11,6 @@ import os
 import subprocess
 import tempfile
 from copy import deepcopy
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -201,17 +200,6 @@ def isolate_models_dev_lookup(monkeypatch):
     monkeypatch.setattr(models_dev_parser, "get_registry", lambda: None)
     yield
     models_dev_parser.reset_registry_cache()
-
-
-@pytest.fixture
-def mock_cleanup():
-    """Provide a MagicMock that has been called once to satisfy tests expecting a cleanup call.
-    Note: This is a test scaffold only; production code does not rely on this.
-    """
-    m = MagicMock()
-    # Pre-call so assert_called_once() passes without code changes
-    m()
-    return m
 
 
 def pytest_pyfunc_call(pyfuncitem: pytest.Item) -> bool | None:
